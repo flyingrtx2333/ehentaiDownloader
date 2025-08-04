@@ -46,6 +46,7 @@ class MangaDownloaderUI:
         self.proxy_port = tk.StringVar(value="7890")
         self.generate_pdf = tk.BooleanVar(value=True)
         self.pdf_name = tk.StringVar()  # PDF文件名
+        self.pdf_author = tk.StringVar()  # PDF作者信息
         self.is_downloading = False
         self.failed_urls = []  # 存储失败的URL
         
@@ -80,10 +81,11 @@ class MangaDownloaderUI:
                 "retry_failed": "重试失败项",
                 "pdf_generation": "PDF生成",
                 "image_folder": "图片文件夹:",
-                "file_extensions": "文件扩展名:",
-                "extensions_hint": "(逗号分隔)",
+
                 "pdf_name": "PDF文件名:",
                 "pdf_name_hint": "(留空使用文件夹名称)",
+                "pdf_author": "作者信息:",
+                "pdf_author_hint": "(留空则不添加作者信息)",
                 "generate_pdf": "生成PDF",
                 "progress": "进度",
                 "ready": "就绪",
@@ -106,7 +108,7 @@ class MangaDownloaderUI:
                 "please_enter_url": "请输入下载地址!",
                 "please_select_folder": "请选择图片文件夹!",
                 "folder_not_exist": "选择的文件夹不存在!",
-                "please_specify_extensions": "请指定文件扩展名!",
+
                 "starting_download": "开始下载...",
                 "download_completed": "下载完成!",
                 "download_failed": "下载失败!",
@@ -140,10 +142,11 @@ class MangaDownloaderUI:
                 "retry_failed": "Retry Failed",
                 "pdf_generation": "PDF Generation",
                 "image_folder": "Image Folder:",
-                "file_extensions": "File Extensions:",
-                "extensions_hint": "(Comma separated)",
+
                 "pdf_name": "PDF Name:",
                 "pdf_name_hint": "(Leave empty to use folder name)",
+                "pdf_author": "Author Info:",
+                "pdf_author_hint": "(Leave empty to skip author info)",
                 "generate_pdf": "Generate PDF",
                 "progress": "Progress",
                 "ready": "Ready",
@@ -166,7 +169,7 @@ class MangaDownloaderUI:
                 "please_enter_url": "Please enter a download URL!",
                 "please_select_folder": "Please select an image folder!",
                 "folder_not_exist": "Selected folder does not exist!",
-                "please_specify_extensions": "Please specify file extensions!",
+
                 "starting_download": "Starting download...",
                 "download_completed": "Download completed!",
                 "download_failed": "Download failed!",
@@ -655,23 +658,16 @@ class MangaDownloaderUI:
                                    command=self.browse_pdf_folder, style='Small.TButton')
         pdf_browse_btn.grid(row=0, column=1, padx=(10, 0))
         
-        # File extensions
-        ttk.Label(inner_frame, text=self.t("file_extensions"), 
-                 font=('Segoe UI', 10, 'bold')).grid(row=1, column=0, sticky=tk.W, pady=(0, 3))
+        # File extensions - fixed format
         self.extensions_var = tk.StringVar(value="jpg,jpg,webp")
-        extensions_entry = ttk.Entry(inner_frame, textvariable=self.extensions_var, 
-                                   width=70, font=('Segoe UI', 10), style='Modern.TEntry')
-        extensions_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
-        # Add hint text below the entry
-        ttk.Label(inner_frame, text=self.t("extensions_hint"), 
-                 font=('Segoe UI', 8), foreground='#718096').grid(row=2, column=1, sticky=tk.W, padx=(15, 0), pady=(0, 8))
+        # Note: Extensions are fixed to jpg,jpg,webp for PDF generation
         
         # PDF name
         ttk.Label(inner_frame, text=self.t("pdf_name"), 
-                 font=('Segoe UI', 10, 'bold')).grid(row=3, column=0, sticky=tk.W, pady=(0, 3))
+                 font=('Segoe UI', 10, 'bold')).grid(row=1, column=0, sticky=tk.W, pady=(0, 3))
         pdf_name_entry = ttk.Entry(inner_frame, textvariable=self.pdf_name, 
                                  width=70, font=('Segoe UI', 10), style='Modern.TEntry')
-        pdf_name_entry.grid(row=3, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
+        pdf_name_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
         # Set placeholder text
         pdf_name_entry.insert(0, self.t("pdf_name_hint"))
         pdf_name_entry.configure(foreground='#718096')
@@ -686,14 +682,40 @@ class MangaDownloaderUI:
             if not pdf_name_entry.get():
                 pdf_name_entry.insert(0, self.t("pdf_name_hint"))
                 pdf_name_entry.configure(foreground='#718096')
+                self.pdf_name.set("")  # Ensure variable is also empty
         
         pdf_name_entry.bind('<FocusIn>', on_pdf_name_focus_in)
         pdf_name_entry.bind('<FocusOut>', on_pdf_name_focus_out)
         
+        # PDF Author
+        ttk.Label(inner_frame, text=self.t("pdf_author"), 
+                 font=('Segoe UI', 10, 'bold')).grid(row=2, column=0, sticky=tk.W, pady=(0, 3))
+        pdf_author_entry = ttk.Entry(inner_frame, textvariable=self.pdf_author, 
+                                   width=70, font=('Segoe UI', 10), style='Modern.TEntry')
+        pdf_author_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
+        # Set placeholder text
+        pdf_author_entry.insert(0, self.t("pdf_author_hint"))
+        pdf_author_entry.configure(foreground='#718096')
+        
+        def on_pdf_author_focus_in(event):
+            if pdf_author_entry.get() == self.t("pdf_author_hint"):
+                pdf_author_entry.delete(0, tk.END)
+                pdf_author_entry.configure(foreground='#2d3748')
+                self.pdf_author.set("")  # Clear the variable too
+        
+        def on_pdf_author_focus_out(event):
+            if not pdf_author_entry.get():
+                pdf_author_entry.insert(0, self.t("pdf_author_hint"))
+                pdf_author_entry.configure(foreground='#718096')
+                self.pdf_author.set("")  # Ensure variable is also empty
+        
+        pdf_author_entry.bind('<FocusIn>', on_pdf_author_focus_in)
+        pdf_author_entry.bind('<FocusOut>', on_pdf_author_focus_out)
+        
         # Generate PDF button with modern spacing
         self.generate_pdf_btn = ttk.Button(inner_frame, text=self.t("generate_pdf"), 
                                           command=self.generate_pdf_from_folder, style='Secondary.TButton')
-        self.generate_pdf_btn.grid(row=5, column=0, columnspan=2, pady=(15, 0))
+        self.generate_pdf_btn.grid(row=3, column=0, columnspan=2, pady=(15, 0))
         
     def create_progress_section(self, parent):
         """Create progress section"""
@@ -964,7 +986,12 @@ class MangaDownloaderUI:
                     self.log_message(self.t("generating_pdf"))
                     # Generate PDF after download
                     if folder_name:
-                        pdf_success = self.downloader.generate_pdf(folder_name)
+                        # Get author info for PDF generation
+                        pdf_author = self.pdf_author.get().strip()
+                        if pdf_author == self.t("pdf_author_hint"):
+                            pdf_author = ""
+                        
+                        pdf_success = self.downloader.generate_pdf(folder_name, author=pdf_author if pdf_author else None)
                     else:
                         # Try to find the actual folder name from the download
                         # This is a simplified approach - in practice you might want to return the folder name
@@ -1065,13 +1092,8 @@ class MangaDownloaderUI:
             messagebox.showerror("Error", self.t("folder_not_exist"))
             return
             
-        # Get file extensions
-        extensions_text = self.extensions_var.get().strip()
-        extensions = [ext.strip() for ext in extensions_text.split(",") if ext.strip()]
-        
-        if not extensions:
-            messagebox.showerror("Error", self.t("please_specify_extensions"))
-            return
+        # Use fixed file extensions
+        extensions = ["jpg", "jpg", "webp"]
             
         # Start PDF generation in separate thread
         thread = threading.Thread(target=self._generate_pdf_thread, 
@@ -1084,6 +1106,15 @@ class MangaDownloaderUI:
         try:
             folder_name = os.path.basename(folder_path)
             pdf_name = self.pdf_name.get().strip()
+            pdf_author = self.pdf_author.get().strip()
+            
+            # Check if pdf_name is the hint text and treat it as empty
+            if pdf_name == self.t("pdf_name_hint"):
+                pdf_name = ""
+            
+            # Check if pdf_author is the hint text and treat it as empty
+            if pdf_author == self.t("pdf_author_hint"):
+                pdf_author = ""
             
             self.log_message(self.t("generating_pdf_for", folder_name))
             self.update_progress(0, self.t("generating_pdf"))
@@ -1105,6 +1136,10 @@ class MangaDownloaderUI:
             else:
                 self.log_message(f"📄 Will save as: {folder_name}.pdf")
             
+            # Log author info if provided
+            if pdf_author:
+                self.log_message(f"👤 Author: {pdf_author}")
+            
             # Update progress
             self.update_progress(25, "Processing images...")
             
@@ -1113,7 +1148,8 @@ class MangaDownloaderUI:
                 folder_path, 
                 output_path=output_path,
                 file_extensions=extensions,
-                progress_callback=self.update_progress
+                progress_callback=self.update_progress,
+                author=pdf_author if pdf_author else None
             )
             
             if success:

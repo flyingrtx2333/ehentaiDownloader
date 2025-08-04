@@ -101,30 +101,33 @@ class MangaDownloader:
         
         # If single page only, skip counting total pages
         if not single_page_only:
-            # First pass to count total pages
+            # Get total pages from first URL response
             if progress_callback:
-                progress_callback(0, "Counting total pages...")
+                progress_callback(0, "Getting total page count...")
             
-            temp_current_id = current_id
-            temp_current_page = current_page
-            while True:
-                url = f"https://e-hentai.org/s/{temp_current_id}/{book_id}-{temp_current_page}"
-                try:
-                    response = self.session.get(
-                        url=url,
-                        proxies=self.proxies,
-                        headers=self._get_headers(),
-                        timeout=8
-                    )
-                    total_pages += 1
-                    next_page_id = self._find_next_page_id(response.text, temp_current_page + 1)
-                    if next_page_id:
-                        temp_current_id = next_page_id
-                        temp_current_page += 1
-                    else:
-                        break
-                except:
-                    break
+            try:
+                first_url = f"https://e-hentai.org/s/{current_id}/{book_id}-{current_page}"
+                response = self.session.get(
+                    url=first_url,
+                    proxies=self.proxies,
+                    headers=self._get_headers(),
+                    timeout=8
+                )
+                
+                if "Your IP address has been temporarily banned" in response.text:
+                    logger.warning("IP has been temporarily banned, need to change proxy")
+                    return False
+                
+                total_pages = self._extract_total_pages(response.text)
+                if total_pages == 0:
+                    logger.warning("Could not extract total pages, will count during download")
+                    total_pages = 1  # Will be updated during download
+                else:
+                    logger.info(f"Total pages detected: {total_pages}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to get total pages from first URL: {e}")
+                total_pages = 1  # Will be updated during download
         else:
             # For single page download, set total_pages to 1
             total_pages = 1
@@ -153,6 +156,13 @@ class MangaDownloader:
                 if "Your IP address has been temporarily banned" in response.text:
                     logger.warning("IP has been temporarily banned, need to change proxy")
                     return False
+                
+                # If we couldn't get total pages initially, try to extract it now
+                if total_pages == 1 and current_page == current_page_num:
+                    extracted_total = self._extract_total_pages(response.text)
+                    if extracted_total > 0:
+                        total_pages = extracted_total
+                        logger.info(f"Updated total pages to: {total_pages}")
                 
                 title = self._extract_title(response.text)
                 if title in self.title_replace_map:
@@ -216,6 +226,40 @@ class MangaDownloader:
         matches = re.findall(pattern, html_content)
         return matches[0] if matches else None
     
+    def _extract_total_pages(self, html_content: str) -> int:
+        """Extract total page count from HTML content"""
+        try:
+            # Look for pattern like: <span>1</span> / <span>207</span>
+            pattern = r'<span>\d+</span>\s*/\s*<span>(\d+)</span>'
+            matches = re.findall(pattern, html_content)
+            if matches:
+                logger.debug(f"Found total pages using pattern1: {matches[0]}")
+                return int(matches[0])
+            
+            # Alternative pattern: look for " / 207" in the page indicator
+            pattern2 = r'/\s*(\d+)'
+            matches2 = re.findall(pattern2, html_content)
+            if matches2:
+                # Find the largest number which is likely the total page count
+                numbers = [int(match) for match in matches2 if match.isdigit()]
+                if numbers:
+                    max_num = max(numbers)
+                    logger.debug(f"Found total pages using pattern2: {max_num}")
+                    return max_num
+            
+            # More specific pattern for the page indicator div
+            pattern3 = r'<div><span>\d+</span>\s*/\s*<span>(\d+)</span></div>'
+            matches3 = re.findall(pattern3, html_content)
+            if matches3:
+                logger.debug(f"Found total pages using pattern3: {matches3[0]}")
+                return int(matches3[0])
+            
+            logger.debug("No total pages pattern found in HTML")
+            return 0
+        except Exception as e:
+            logger.error(f"Failed to extract total pages: {e}")
+            return 0
+    
     def _download_and_save_image(self, html_content: str, dir_name: str, page_num: int) -> bool:
         """
         Download and save image from HTML content
@@ -275,13 +319,14 @@ class MangaDownloader:
                 return matches[i + 1]
         return None
     
-    def generate_pdf(self, book_name: str, file_extensions: List[str] = None) -> bool:
+    def generate_pdf(self, book_name: str, file_extensions: List[str] = None, author: str = None) -> bool:
         """
         Generate PDF from images in a directory
         
         Args:
             book_name: Directory name containing images
             file_extensions: List of file extensions to include (default: ['jpg', 'webp'])
+            author: Author information to add to PDF metadata
             
         Returns:
             True if successful, False otherwise
@@ -290,6 +335,8 @@ class MangaDownloader:
             file_extensions = ['jpg', 'webp']
         
         logger.info(f"Starting PDF generation for {book_name}")
+        if author:
+            logger.info(f"Author: {author}")
         
         book_path = Path(book_name)
         if not book_path.exists():
@@ -321,9 +368,19 @@ class MangaDownloader:
                     img = img.convert("RGB")
                 sources.append(img)
             
-            # Save PDF
+            # Save PDF with author metadata
             pdf_path = book_path / f"{book_name}.pdf"
-            output_image.save(str(pdf_path), "PDF", save_all=True, append_images=sources)
+            
+            # Prepare PDF info with author metadata
+            pdf_info = {}
+            if author:
+                pdf_info['Author'] = author
+                pdf_info['Creator'] = 'Manga Downloader'
+                pdf_info['Producer'] = 'Pillow PDF Generator'
+            if os.path.exists(pdf_path):
+                logger.info(f"PDF {pdf_path} already exists, removing it")
+                os.remove(pdf_path)
+            output_image.save(str(pdf_path), "PDF", save_all=True, append_images=sources, **pdf_info)
             
             logger.info(f"Successfully generated PDF: {pdf_path}")
             return True

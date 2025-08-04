@@ -12,8 +12,6 @@ from PIL import Image
 from loguru import logger
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
-
 
 class PDFGenerator:
     """Standalone PDF generator for image folders"""
@@ -24,7 +22,8 @@ class PDFGenerator:
     
     def generate_pdf_from_folder(self, folder_path: str, output_path: str = None, 
                                 file_extensions: List[str] = None, 
-                                sort_by_name: bool = True, progress_callback=None) -> bool:
+                                sort_by_name: bool = True, progress_callback=None,
+                                author: str = None) -> bool:
         """
         Generate PDF from images in a folder
         
@@ -33,6 +32,7 @@ class PDFGenerator:
             output_path: Output PDF path (optional, defaults to folder_name.pdf)
             file_extensions: List of file extensions to include
             sort_by_name: Whether to sort files by name
+            author: Author information to add to PDF metadata
             
         Returns:
             True if successful, False otherwise
@@ -81,12 +81,14 @@ class PDFGenerator:
         
         logger.info(f"Generating PDF from {len(image_files)} images")
         logger.info(f"Output: {output_path}")
+        if author:
+            logger.info(f"Author: {author}")
         
         if progress_callback:
             progress_callback(50, f"Processing {len(image_files)} images...")
         
         try:
-            success = self._create_pdf_with_pillow(image_files, output_path, progress_callback)
+            success = self._create_pdf_with_pillow(image_files, output_path, progress_callback, author)
             if success:
                 logger.info(f"✅ PDF generated successfully: {output_path}")
                 if progress_callback:
@@ -106,7 +108,8 @@ class PDFGenerator:
                                    file_extensions: List[str] = None,
                                    page_size: str = "A4",
                                    max_width: int = 500,
-                                   max_height: int = 700) -> bool:
+                                   max_height: int = 700,
+                                   author: str = None) -> bool:
         """
         Generate PDF using reportlab with more control over layout
         
@@ -117,6 +120,7 @@ class PDFGenerator:
             page_size: Page size ("A4", "letter", etc.)
             max_width: Maximum image width
             max_height: Maximum image height
+            author: Author information to add to PDF metadata
             
         Returns:
             True if successful, False otherwise
@@ -165,6 +169,8 @@ class PDFGenerator:
         
         logger.info(f"Generating PDF with reportlab from {len(image_files)} images")
         logger.info(f"Output: {output_path}")
+        if author:
+            logger.info(f"Author: {author}")
         
         try:
             # Check if output file exists and remove it to ensure clean generation
@@ -173,6 +179,12 @@ class PDFGenerator:
                 output_path.unlink()
             
             c = canvas.Canvas(str(output_path), pagesize=pagesize)
+            
+            # Add PDF metadata including author
+            if author:
+                c.setAuthor(author)
+            c.setTitle(folder.name)
+            c.setSubject("Manga PDF")
             
             for i, image_path in enumerate(image_files):
                 logger.debug(f"Processing image {i+1}/{len(image_files)}: {image_path.name}")
@@ -209,8 +221,8 @@ class PDFGenerator:
             logger.error(f"❌ Failed to generate PDF with reportlab: {e}")
             return False
     
-    def _create_pdf_with_pillow(self, image_files: List[Path], output_path: Path, progress_callback=None) -> bool:
-        """Create PDF using Pillow"""
+    def _create_pdf_with_pillow(self, image_files: List[Path], output_path: Path, progress_callback=None, author: str = None) -> bool:
+        """Create PDF using Pillow with author metadata"""
         try:
             # Check if output file exists and remove it to avoid appending
             if output_path.exists():
@@ -236,7 +248,14 @@ class PDFGenerator:
             if progress_callback:
                 progress_callback(90, "Saving PDF...")
             
-            output_image.save(str(output_path), "PDF", save_all=True, append_images=sources)
+            # Prepare PDF info with author metadata
+            pdf_info = {}
+            if author:
+                pdf_info['Author'] = author
+                pdf_info['Creator'] = 'Manga Downloader'
+                pdf_info['Producer'] = 'Pillow PDF Generator'
+            
+            output_image.save(str(output_path), "PDF", save_all=True, append_images=sources, **pdf_info)
             logger.info(f"✅ PDF generated successfully with Pillow: {output_path}")
             return True
             
