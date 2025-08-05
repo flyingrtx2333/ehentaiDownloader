@@ -10,3 +10,4 @@ __pycache__/
 *.pyzwzw
 *.pyzwzwz
 ui_config.json
+*.log
