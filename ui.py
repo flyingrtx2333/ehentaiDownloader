@@ -8,6 +8,7 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
 import os
+import json
 from pathlib import Path
 from typing import Optional
 
@@ -30,6 +31,9 @@ class MangaDownloaderUI:
         # 居中显示窗口
         self.center_window()
         
+        # 配置文件路径
+        self.config_file = "ui_config.json"
+        
         # 语言设置
         self.current_language = "zh"  # 默认中文
         self.translations = self._get_translations()
@@ -50,10 +54,82 @@ class MangaDownloaderUI:
         self.is_downloading = False
         self.failed_urls = []  # 存储失败的URL
         
+        # 加载保存的配置
+        self.load_config()
+        
         # 设置现代化样式
         self.setup_modern_style()
         self.setup_ui()
         
+        # 绑定窗口关闭事件，保存配置
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+    def load_config(self):
+        """加载保存的配置"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                
+                # 恢复各个输入框的值
+                if 'download_url' in config:
+                    self.download_url.set(config['download_url'])
+                if 'save_path' in config:
+                    self.save_path.set(config['save_path'])
+                if 'folder_name' in config:
+                    folder_name = config['folder_name']
+                    if folder_name and folder_name != self.t("folder_name_hint"):
+                        self.folder_name.set(folder_name)
+                if 'proxy_host' in config:
+                    self.proxy_host.set(config['proxy_host'])
+                if 'proxy_port' in config:
+                    self.proxy_port.set(config['proxy_port'])
+                if 'generate_pdf' in config:
+                    self.generate_pdf.set(config['generate_pdf'])
+                if 'pdf_name' in config:
+                    pdf_name = config['pdf_name']
+                    if pdf_name and pdf_name != self.t("pdf_name_hint"):
+                        self.pdf_name.set(pdf_name)
+                if 'pdf_author' in config:
+                    pdf_author = config['pdf_author']
+                    if pdf_author and pdf_author != self.t("pdf_author_hint"):
+                        self.pdf_author.set(pdf_author)
+                if 'pdf_folder' in config:
+                    # PDF文件夹路径会在UI创建后设置
+                    self._saved_pdf_folder = config['pdf_folder']
+                if 'language' in config:
+                    self.current_language = config['language']
+                    
+        except Exception as e:
+            print(f"加载配置失败: {e}")
+    
+    def save_config(self):
+        """保存当前配置"""
+        try:
+            config = {
+                'download_url': self.download_url.get(),
+                'save_path': self.save_path.get(),
+                'folder_name': self.folder_name.get(),
+                'proxy_host': self.proxy_host.get(),
+                'proxy_port': self.proxy_port.get(),
+                'generate_pdf': self.generate_pdf.get(),
+                'pdf_name': self.pdf_name.get(),
+                'pdf_author': self.pdf_author.get(),
+                'pdf_folder': getattr(self, 'pdf_folder_var', tk.StringVar()).get(),
+                'language': self.current_language
+            }
+            
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+    
+    def on_closing(self):
+        """窗口关闭时的处理"""
+        self.save_config()
+        self.root.destroy()
+    
     def center_window(self):
         """居中显示窗口"""
         self.root.update_idletasks()
@@ -487,6 +563,10 @@ class MangaDownloaderUI:
         # Log Section
         self.create_log_section(main_frame)
         
+        # 设置保存的PDF文件夹路径（如果存在）
+        if hasattr(self, '_saved_pdf_folder'):
+            self.pdf_folder_var.set(self._saved_pdf_folder)
+        
     def create_header(self, parent):
         """创建标题和语言选择器"""
         header_frame = ttk.Frame(parent, style='Modern.TFrame')
@@ -539,6 +619,8 @@ class MangaDownloaderUI:
         url_entry = ttk.Entry(inner_frame, textvariable=self.download_url, 
                              width=70, font=('Segoe UI', 10), style='Modern.TEntry')
         url_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
+        # 绑定自动保存
+        self.download_url.trace('w', lambda *args: self.save_config())
         
         # Save Path
         ttk.Label(inner_frame, text=self.t("save_path"), 
@@ -550,6 +632,8 @@ class MangaDownloaderUI:
         path_entry = ttk.Entry(path_frame, textvariable=self.save_path, 
                               width=60, font=('Segoe UI', 10), style='Modern.TEntry')
         path_entry.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        # 绑定自动保存
+        self.save_path.trace('w', lambda *args: self.save_config())
         
         browse_btn = ttk.Button(path_frame, text=self.t("browse"), 
                                command=self.browse_save_path, style='Small.TButton')
@@ -561,9 +645,12 @@ class MangaDownloaderUI:
         folder_entry = ttk.Entry(inner_frame, textvariable=self.folder_name, 
                                 width=70, font=('Segoe UI', 10), style='Modern.TEntry')
         folder_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
-        # Set placeholder text
-        folder_entry.insert(0, self.t("folder_name_hint"))
-        folder_entry.configure(foreground='#718096')
+        # 绑定自动保存
+        self.folder_name.trace('w', lambda *args: self.save_config())
+        # Set placeholder text only if no saved value
+        if not self.folder_name.get():
+            folder_entry.insert(0, self.t("folder_name_hint"))
+            folder_entry.configure(foreground='#718096')
         
         def on_folder_focus_in(event):
             if folder_entry.get() == self.t("folder_name_hint"):
@@ -575,6 +662,10 @@ class MangaDownloaderUI:
             if not folder_entry.get():
                 folder_entry.insert(0, self.t("folder_name_hint"))
                 folder_entry.configure(foreground='#718096')
+                # 不保存placeholder文本
+            else:
+                # 保存实际输入的内容
+                self.save_config()
         
         folder_entry.bind('<FocusIn>', on_folder_focus_in)
         folder_entry.bind('<FocusOut>', on_folder_focus_out)
@@ -595,12 +686,16 @@ class MangaDownloaderUI:
         proxy_host_entry = ttk.Entry(proxy_frame, textvariable=self.proxy_host, 
                                    width=15, font=('Segoe UI', 9), style='Modern.TEntry')
         proxy_host_entry.pack(side=tk.LEFT, padx=(5, 15))
+        # 绑定自动保存
+        self.proxy_host.trace('w', lambda *args: self.save_config())
         
         ttk.Label(proxy_frame, text=self.t("proxy_port"), 
                  font=('Segoe UI', 9)).pack(side=tk.LEFT)
         proxy_port_entry = ttk.Entry(proxy_frame, textvariable=self.proxy_port, 
                                    width=8, font=('Segoe UI', 9), style='Modern.TEntry')
         proxy_port_entry.pack(side=tk.LEFT, padx=(5, 0))
+        # 绑定自动保存
+        self.proxy_port.trace('w', lambda *args: self.save_config())
         
         # Options with modern checkbox styling
         options_frame = ttk.Frame(inner_frame)
@@ -614,7 +709,8 @@ class MangaDownloaderUI:
                                   selectcolor='#48bb78',  # 选中时的颜色（绿色）
                                   activeforeground='#2d3748',
                                   relief='flat',
-                                  bd=0)
+                                  bd=0,
+                                  command=self.save_config)  # 绑定自动保存
         pdf_check.pack(side=tk.LEFT)
         
         # Download and Retry buttons with modern spacing
@@ -653,6 +749,8 @@ class MangaDownloaderUI:
         pdf_folder_entry = ttk.Entry(pdf_path_frame, textvariable=self.pdf_folder_var, 
                                    width=60, font=('Segoe UI', 10), style='Modern.TEntry')
         pdf_folder_entry.grid(row=0, column=0, sticky=(tk.W, tk.E))
+        # 绑定自动保存
+        self.pdf_folder_var.trace('w', lambda *args: self.save_config())
         
         pdf_browse_btn = ttk.Button(pdf_path_frame, text=self.t("browse"), 
                                    command=self.browse_pdf_folder, style='Small.TButton')
@@ -668,9 +766,12 @@ class MangaDownloaderUI:
         pdf_name_entry = ttk.Entry(inner_frame, textvariable=self.pdf_name, 
                                  width=70, font=('Segoe UI', 10), style='Modern.TEntry')
         pdf_name_entry.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
-        # Set placeholder text
-        pdf_name_entry.insert(0, self.t("pdf_name_hint"))
-        pdf_name_entry.configure(foreground='#718096')
+        # 绑定自动保存
+        self.pdf_name.trace('w', lambda *args: self.save_config())
+        # Set placeholder text only if no saved value
+        if not self.pdf_name.get():
+            pdf_name_entry.insert(0, self.t("pdf_name_hint"))
+            pdf_name_entry.configure(foreground='#718096')
         
         def on_pdf_name_focus_in(event):
             if pdf_name_entry.get() == self.t("pdf_name_hint"):
@@ -683,6 +784,9 @@ class MangaDownloaderUI:
                 pdf_name_entry.insert(0, self.t("pdf_name_hint"))
                 pdf_name_entry.configure(foreground='#718096')
                 self.pdf_name.set("")  # Ensure variable is also empty
+            else:
+                # 保存实际输入的内容
+                self.save_config()
         
         pdf_name_entry.bind('<FocusIn>', on_pdf_name_focus_in)
         pdf_name_entry.bind('<FocusOut>', on_pdf_name_focus_out)
@@ -693,9 +797,12 @@ class MangaDownloaderUI:
         pdf_author_entry = ttk.Entry(inner_frame, textvariable=self.pdf_author, 
                                    width=70, font=('Segoe UI', 10), style='Modern.TEntry')
         pdf_author_entry.grid(row=2, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
-        # Set placeholder text
-        pdf_author_entry.insert(0, self.t("pdf_author_hint"))
-        pdf_author_entry.configure(foreground='#718096')
+        # 绑定自动保存
+        self.pdf_author.trace('w', lambda *args: self.save_config())
+        # Set placeholder text only if no saved value
+        if not self.pdf_author.get():
+            pdf_author_entry.insert(0, self.t("pdf_author_hint"))
+            pdf_author_entry.configure(foreground='#718096')
         
         def on_pdf_author_focus_in(event):
             if pdf_author_entry.get() == self.t("pdf_author_hint"):
@@ -708,6 +815,9 @@ class MangaDownloaderUI:
                 pdf_author_entry.insert(0, self.t("pdf_author_hint"))
                 pdf_author_entry.configure(foreground='#718096')
                 self.pdf_author.set("")  # Ensure variable is also empty
+            else:
+                # 保存实际输入的内容
+                self.save_config()
         
         pdf_author_entry.bind('<FocusIn>', on_pdf_author_focus_in)
         pdf_author_entry.bind('<FocusOut>', on_pdf_author_focus_out)
@@ -843,6 +953,8 @@ class MangaDownloaderUI:
         """切换语言"""
         self.current_language = language
         self.update_ui_texts()
+        # 保存语言设置
+        self.save_config()
         
     def update_ui_texts(self):
         """更新UI文本"""
@@ -858,12 +970,16 @@ class MangaDownloaderUI:
         path = filedialog.askdirectory(title=self.t("select_save_dir"))
         if path:
             self.save_path.set(path)
+            # 保存路径设置
+            self.save_config()
             
     def browse_pdf_folder(self):
         """Browse for PDF folder"""
         path = filedialog.askdirectory(title=self.t("select_image_folder"))
         if path:
             self.pdf_folder_var.set(path)
+            # 保存PDF文件夹路径
+            self.save_config()
             
     def log_message(self, message: str):
         """Add message to log"""
@@ -984,14 +1100,19 @@ class MangaDownloaderUI:
                 
                 if self.generate_pdf.get():
                     self.log_message(self.t("generating_pdf"))
-                    # Generate PDF after download
+                    # Generate PDF after download using pdf_generator for better handling
                     if folder_name:
                         # Get author info for PDF generation
                         pdf_author = self.pdf_author.get().strip()
                         if pdf_author == self.t("pdf_author_hint"):
                             pdf_author = ""
                         
-                        pdf_success = self.downloader.generate_pdf(folder_name, author=pdf_author if pdf_author else None)
+                        # Use pdf_generator instead of downloader.generate_pdf for better duplicate handling
+                        pdf_success = self.pdf_generator.generate_pdf_from_folder(
+                            folder_name, 
+                            file_extensions=["jpg", "jpeg", "png", "webp"],
+                            author=pdf_author if pdf_author else None
+                        )
                     else:
                         # Try to find the actual folder name from the download
                         # This is a simplified approach - in practice you might want to return the folder name
