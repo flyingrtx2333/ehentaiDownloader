@@ -22,7 +22,7 @@ class MangaDownloaderUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("E-hentai Manga Downloader - 漫画下载器")
-        self.root.geometry("800x900")  # 增加默认窗口大小
+        self.root.geometry("800x900")
         self.root.resizable(True, True)
         
         # 设置窗口最小尺寸
@@ -719,11 +719,7 @@ class MangaDownloaderUI:
         
         self.download_btn = ttk.Button(button_frame, text=self.t("start_download"), 
                                       command=self.start_download, style='Success.TButton')
-        self.download_btn.pack(side=tk.LEFT, padx=(0, 15))
-        
-        self.retry_btn = ttk.Button(button_frame, text=self.t("retry_failed"), 
-                                   command=self.retry_failed_downloads, style='Warning.TButton')
-        self.retry_btn.pack(side=tk.LEFT)
+        self.download_btn.pack(side=tk.LEFT)
         
     def create_pdf_section(self, parent):
         """Create PDF generation section"""
@@ -939,10 +935,7 @@ class MangaDownloaderUI:
                               command=self.clear_log, style='Small.TButton')
         clear_btn.pack(side=tk.LEFT, padx=(0, 10))
         
-        # Retry all button
-        retry_all_btn = ttk.Button(button_frame, text=self.t("retry_all"), 
-                                  command=self.retry_failed_downloads, style='Warning.TButton')
-        retry_all_btn.pack(side=tk.LEFT, padx=(0, 10))
+
         
         # Copy URLs button
         copy_urls_btn = ttk.Button(button_frame, text=self.t("copy_urls"), 
@@ -1007,23 +1000,7 @@ class MangaDownloaderUI:
         else:
             self.log_message("No failed URLs to copy")
             
-    def retry_failed_downloads(self):
-        """Retry failed downloads"""
-        if not self.failed_urls:
-            messagebox.showinfo("Info", self.t("no_failed_urls"))
-            return
-            
-        if self.is_downloading:
-            messagebox.showwarning("Warning", self.t("download_in_progress"))
-            return
-            
-        # Start retry in separate thread
-        self.is_downloading = True
-        self.retry_btn.config(state="disabled")
-        
-        thread = threading.Thread(target=self._retry_thread)
-        thread.daemon = True
-        thread.start()
+
         
     def update_progress(self, value: float, status: str, success_count: int = None, 
                        failed_count: int = None, total_count: int = None):
@@ -1054,7 +1031,6 @@ class MangaDownloaderUI:
             
         # Start download in separate thread
         self.is_downloading = True
-        self.download_btn.config(state="disabled")
         
         thread = threading.Thread(target=self._download_thread)
         thread.daemon = True
@@ -1122,6 +1098,12 @@ class MangaDownloaderUI:
                         self.log_message(self.t("pdf_generated"))
                     else:
                         self.log_message(self.t("pdf_failed"))
+                
+                # Check for failed URLs and handle auto-retry
+                if hasattr(self.downloader, 'failed_urls') and self.downloader.failed_urls:
+                    self.failed_urls = self.downloader.failed_urls
+                    self.update_failed_urls_display()
+                    self._handle_auto_retry(url, folder_name, proxy_host, proxy_port)
                     
             else:
                 self.update_progress(0, self.t("download_failed"))
@@ -1134,63 +1116,145 @@ class MangaDownloaderUI:
         finally:
             self.is_downloading = False
             self.download_btn.config(state="normal")
-            self.retry_btn.config(state="normal")
-            
-    def _retry_thread(self):
-        """Retry failed downloads thread"""
+    
+    def _handle_auto_retry(self, url, folder_name, proxy_host, proxy_port):
+        """Handle automatic retry with countdown dialog"""
+        failed_count = len(self.failed_urls)
+        self.log_message(f"发现 {failed_count} 个失败的URL，准备自动重试...")
+        
+        # Show countdown dialog
+        self.root.after(0, lambda: self._show_retry_dialog(url, folder_name, proxy_host, proxy_port, failed_count))
+    
+    def _show_retry_dialog(self, url, folder_name, proxy_host, proxy_port, failed_count):
+        """Show retry dialog with countdown"""
+        # Create countdown dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("自动重试")
+        dialog.geometry("400x200")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        
+        # Center dialog
+        dialog.update_idletasks()
+        x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
+        y = (dialog.winfo_screenheight() // 2) - (200 // 2)
+        dialog.geometry(f"400x200+{x}+{y}")
+        
+        # Dialog content
+        main_frame = ttk.Frame(dialog, padding="20")
+        main_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Message
+        message_label = ttk.Label(main_frame, 
+                                text=f"下载完成，但有 {failed_count} 个页面下载失败。\n\n"
+                                     f"系统将在10秒后自动重试失败的页面。\n"
+                                     f"点击'取消'按钮可以阻止自动重试。",
+                                font=('Segoe UI', 10),
+                                justify=tk.CENTER)
+        message_label.pack(pady=(0, 20))
+        
+        # Countdown label
+        countdown_var = tk.StringVar(value="10")
+        countdown_label = ttk.Label(main_frame, 
+                                  textvariable=countdown_var,
+                                  font=('Segoe UI', 16, 'bold'),
+                                  foreground='#f56565')
+        countdown_label.pack(pady=(0, 20))
+        
+        # Buttons
+        button_frame = ttk.Frame(main_frame)
+        button_frame.pack()
+        
+        cancel_btn = ttk.Button(button_frame, text="取消", 
+                               command=lambda: self._cancel_retry(dialog),
+                               style='Small.TButton')
+        cancel_btn.pack(side=tk.LEFT, padx=(0, 10))
+        
+        # Countdown function
+        def countdown(remaining):
+            if remaining > 0:
+                countdown_var.set(str(remaining))
+                dialog.after(1000, lambda: countdown(remaining - 1))
+            else:
+                dialog.destroy()
+                self._start_auto_retry(url, folder_name, proxy_host, proxy_port)
+        
+        # Start countdown
+        countdown(10)
+        
+        # Focus on dialog
+        dialog.focus_set()
+    
+    def _cancel_retry(self, dialog):
+        """Cancel auto retry"""
+        dialog.destroy()
+        self.log_message("用户取消了自动重试")
+    
+    def _start_auto_retry(self, url, folder_name, proxy_host, proxy_port):
+        """Start automatic retry"""
+        self.log_message("开始自动重试失败的页面...")
+        self.update_progress(0, "自动重试中...")
+        
+        # Start retry in separate thread
+        thread = threading.Thread(target=self._auto_retry_thread, 
+                                args=(url, folder_name, proxy_host, proxy_port))
+        thread.daemon = True
+        thread.start()
+    
+    def _auto_retry_thread(self, url, folder_name, proxy_host, proxy_port):
+        """Automatic retry thread"""
         try:
-            if not self.failed_urls:
-                self.log_message(self.t("no_failed_urls"))
-                return
-                
-            self.log_message(f"Retrying {len(self.failed_urls)} failed URLs...")
-            self.update_progress(0, "Retrying failed downloads...")
+            self.is_downloading = True
+            self.download_btn.config(state="disabled")
             
-            # Create a new downloader for retry
+            # Create new downloader for retry
             retry_downloader = MangaDownloader(
-                proxy_host=self.proxy_host.get().strip(),
-                proxy_port=int(self.proxy_port.get().strip())
+                proxy_host=proxy_host,
+                proxy_port=int(proxy_port)
             )
             
-            retry_success_count = 0
-            retry_failed_count = 0
+            # Set save path
+            save_path = self.save_path.get().strip()
+            if save_path:
+                os.chdir(save_path)
             
-            for i, url in enumerate(self.failed_urls):
-                try:
-                    self.update_progress((i / len(self.failed_urls)) * 100, f"Retrying {i+1}/{len(self.failed_urls)}")
+            self.log_message(f"重试 {len(self.failed_urls)} 个失败的URL...")
+            
+            # Retry the entire download process with auto_retry enabled
+            success = retry_downloader.download_manga_from_url(
+                url,
+                custom_folder_name=folder_name if folder_name else None,
+                progress_callback=self._progress_callback,
+                auto_retry=True  # Enable auto retry
+            )
+            
+            if success:
+                self.update_progress(100, "自动重试完成")
+                self.log_message("自动重试完成！")
+                
+                # Update failed URLs
+                if hasattr(retry_downloader, 'failed_urls'):
+                    self.failed_urls = retry_downloader.failed_urls
+                    self.update_failed_urls_display()
                     
-                    # Extract folder name from URL or use default
-                    folder_name = self.folder_name.get().strip()
-                    
-                    success = retry_downloader.download_manga_from_url(
-                        url,
-                        custom_folder_name=folder_name if folder_name else None,
-                        single_page_only=True
-                    )
-                    
-                    if success:
-                        retry_success_count += 1
-                        self.failed_urls.remove(url)
+                    # If there are still failed URLs, show dialog again
+                    if self.failed_urls:
+                        self.log_message(f"仍有 {len(self.failed_urls)} 个页面失败")
+                        self.root.after(0, lambda: self._show_retry_dialog(url, folder_name, proxy_host, proxy_port, len(self.failed_urls)))
                     else:
-                        retry_failed_count += 1
-                        
-                except Exception as e:
-                    retry_failed_count += 1
-                    self.log_message(f"Retry failed for {url}: {e}")
-                    
-            # Update display
-            self.update_failed_urls_display()
-            self.update_progress(100, self.t("retry_completed"), 
-                               retry_success_count, retry_failed_count, len(self.failed_urls))
-            self.log_message(f"Retry completed: {retry_success_count} successful, {retry_failed_count} failed")
-            
+                        self.log_message("所有页面下载成功！")
+            else:
+                self.update_progress(0, "自动重试失败")
+                self.log_message("自动重试失败")
+                
         except Exception as e:
-            self.log_message(f"Error during retry: {e}")
-            self.update_progress(0, self.t("error_occurred"))
+            self.log_message(f"自动重试过程中发生错误: {e}")
+            self.update_progress(0, "自动重试错误")
             
         finally:
             self.is_downloading = False
-            self.retry_btn.config(state="normal")
+            self.download_btn.config(state="normal")
             
     def _progress_callback(self, progress: float, status: str, success_count: int = None, 
                           failed_count: int = None, total_count: int = None):

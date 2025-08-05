@@ -77,7 +77,8 @@ class MangaDownloader:
         return book_id, current_page, current_id
     
     def download_manga_from_url(self, first_url: str, custom_folder_name: str = None, 
-                               progress_callback=None, single_page_only: bool = False) -> bool:
+                               progress_callback=None, single_page_only: bool = False, 
+                               auto_retry: bool = False) -> bool:
         """
         Download manga starting from a specific URL
         
@@ -86,6 +87,7 @@ class MangaDownloader:
             custom_folder_name: Custom folder name to use instead of manga title
             progress_callback: Callback function for progress updates (progress, status, success_count, failed_count, total_count)
             single_page_only: If True, only download the single page specified by first_url
+            auto_retry: If True, automatically retry failed downloads
             
         Returns:
             True if successful, False otherwise
@@ -202,11 +204,46 @@ class MangaDownloader:
                 if progress_callback:
                     progress_callback(100, "Download completed, generating PDF...", 
                                    success_count, failed_count, total_pages)
-                self.generate_pdf(title)
                 if self.failed_urls:
                     logger.warning("Failed URLs:")
                     for failed_url in self.failed_urls:
                         logger.warning(failed_url)
+                    
+                    # Auto retry logic
+                    if auto_retry and self.failed_urls:
+                        logger.info(f"Auto retry enabled, retrying {len(self.failed_urls)} failed URLs...")
+                        # Clear failed URLs for the retry attempt
+                        retry_failed_urls = self.failed_urls.copy()
+                        self.failed_urls = []
+                        
+                        # Retry each failed URL
+                        for failed_url in retry_failed_urls:
+                            try:
+                                logger.info(f"Retrying: {failed_url}")
+                                # Extract page info from failed URL
+                                book_id, page_num, current_id = self.parse_url_info(failed_url)
+                                
+                                # Download single page
+                                single_page_success = self.download_manga_from_url(
+                                    failed_url,
+                                    custom_folder_name=custom_folder_name,
+                                    progress_callback=progress_callback,
+                                    single_page_only=True,
+                                    auto_retry=False  # Don't retry again to avoid infinite loop
+                                )
+                                
+                                if not single_page_success:
+                                    self.failed_urls.append(failed_url)
+                                    
+                            except Exception as e:
+                                logger.error(f"Retry failed for {failed_url}: {e}")
+                                self.failed_urls.append(failed_url)
+                        
+                        # Log final results
+                        if self.failed_urls:
+                            logger.warning(f"After auto retry, {len(self.failed_urls)} URLs still failed")
+                        else:
+                            logger.info("Auto retry successful - all URLs downloaded")
                 break
         
         return True
@@ -326,177 +363,3 @@ class MangaDownloader:
         
         alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
         return alphanum_key(text)
-    
-    def generate_pdf(self, book_name: str, file_extensions: List[str] = None, author: str = None) -> bool:
-        """
-        Generate PDF from images in a directory
-        
-        Args:
-            book_name: Directory name containing images
-            file_extensions: List of file extensions to include (default: ['jpg', 'webp'])
-            author: Author information to add to PDF metadata
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        if file_extensions is None:
-            file_extensions = ['jpg', 'webp']
-        
-        logger.info(f"Starting PDF generation for {book_name}")
-        if author:
-            logger.info(f"Author: {author}")
-        
-        book_path = Path(book_name)
-        if not book_path.exists():
-            logger.error(f"Directory {book_name} does not exist")
-            return False
-        
-        # Get all image files
-        image_files = []
-        for ext in file_extensions:
-            image_files.extend(book_path.glob(f"*.{ext}"))
-            image_files.extend(book_path.glob(f"*.{ext.upper()}"))
-        
-        # Remove duplicates (same file with different case extensions)
-        unique_files = []
-        seen_names = set()
-        for file_path in image_files:
-            if file_path.name not in seen_names:
-                unique_files.append(file_path)
-                seen_names.add(file_path.name)
-        
-        image_files = unique_files
-        
-        if not image_files:
-            logger.error(f"No image files found in {book_name}")
-            return False
-        
-        # Sort files by name using natural sort
-        image_files.sort(key=lambda x: self._natural_sort_key(x.name))
-        
-        try:
-            # Open first image
-            output_image = Image.open(image_files[0])
-            sources = []
-            
-            # Process remaining images
-            for image_file in image_files[1:]:
-                img = Image.open(image_file)
-                if img.mode != "RGB":
-                    img = img.convert("RGB")
-                sources.append(img)
-            
-            # Save PDF with author metadata
-            pdf_path = book_path / f"{book_name}.pdf"
-            
-            # Prepare PDF info with author metadata
-            pdf_info = {}
-            if author:
-                pdf_info['Author'] = author
-                pdf_info['Creator'] = 'Manga Downloader'
-                pdf_info['Producer'] = 'Pillow PDF Generator'
-            if os.path.exists(pdf_path):
-                logger.info(f"PDF {pdf_path} already exists, removing it")
-                os.remove(pdf_path)
-            output_image.save(str(pdf_path), "PDF", save_all=True, append_images=sources, **pdf_info)
-            
-            logger.info(f"Successfully generated PDF: {pdf_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to generate PDF for {book_name}: {e}")
-            return False
-    
-    def create_pdf_with_reportlab(self, image_paths: List[str], author: str, pdf_path: str) -> bool:
-        """
-        Create PDF using reportlab (alternative method)
-        
-        Args:
-            image_paths: List of image file paths
-            author: Author name for PDF metadata
-            pdf_path: Output PDF path
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            c = canvas.Canvas(pdf_path, pagesize=letter)
-            c.setTitle(author)
-            c.setAuthor(author)
-            
-            for image_path in image_paths:
-                img = Image.open(image_path)
-                img_width, img_height = img.size
-                aspect_ratio = img_width / img_height
-                max_width = 500
-                max_height = 700
-                
-                # Adjust image size based on aspect ratio
-                if img_width > max_width or img_height > max_height:
-                    if aspect_ratio > 1:
-                        img_width = max_width
-                        img_height = max_width / aspect_ratio
-                    else:
-                        img_height = max_height
-                        img_width = max_height * aspect_ratio
-                    
-                    img.thumbnail((img_width, img_height), Image.LANCZOS)
-                
-                c.drawImage(image_path, 50, 50, width=img_width, height=img_height)
-                c.showPage()
-            
-            c.save()
-            logger.info(f"Successfully created PDF with reportlab: {pdf_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to create PDF with reportlab: {e}")
-            return False
-    
-    def check_folder_for_pdf(self, folder_path: str) -> bool:
-        """Check if folder contains PDF files"""
-        folder = Path(folder_path)
-        if not folder.exists():
-            return False
-        pdf_files = list(folder.glob("*.pdf"))
-        return len(pdf_files) > 0
-    
-    def batch_generate_pdfs(self, directory: str = ".", file_extensions: List[str] = None) -> None:
-        """
-        Generate PDFs for all folders that don't have them
-        
-        Args:
-            directory: Directory to scan
-            file_extensions: List of file extensions to include
-        """
-        if file_extensions is None:
-            file_extensions = ['jpg', 'png', 'webp']
-        
-        directory_path = Path(directory)
-        for item in directory_path.iterdir():
-            if item.is_dir():
-                if not self.check_folder_for_pdf(str(item)):
-                    logger.info(f"Generating PDF for {item.name}")
-                    try:
-                        self.generate_pdf(item.name, file_extensions)
-                    except Exception as e:
-                        logger.error(f"Failed to generate PDF for {item.name}: {e}")
-                        traceback.print_exc()
-
-
-def main():
-    """Main function"""
-    downloader = MangaDownloader()
-    
-    # Example usage
-    downloader.download_manga_from_url("https://e-hentai.org/s/f079533ce8/3210316-1")
-    
-    # Generate PDF for existing folder
-    # downloader.generate_pdf("folder_name", ["jpg", "JPG"])
-    
-    # Batch generate PDFs
-    # downloader.batch_generate_pdfs(".", ["jpg", "png"])
-
-
-if __name__ == '__main__':
-    main() 
