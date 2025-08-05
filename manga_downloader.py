@@ -319,6 +319,14 @@ class MangaDownloader:
                 return matches[i + 1]
         return None
     
+    def _natural_sort_key(self, text: str) -> List[Tuple[int, str]]:
+        """Natural sort key for file names"""
+        def convert(text):
+            return int(text) if text.isdigit() else text.lower()
+        
+        alphanum_key = lambda key: [convert(c) for c in re.split('([0-9]+)', key)]
+        return alphanum_key(text)
+    
     def generate_pdf(self, book_name: str, file_extensions: List[str] = None, author: str = None) -> bool:
         """
         Generate PDF from images in a directory
@@ -349,12 +357,22 @@ class MangaDownloader:
             image_files.extend(book_path.glob(f"*.{ext}"))
             image_files.extend(book_path.glob(f"*.{ext.upper()}"))
         
+        # Remove duplicates (same file with different case extensions)
+        unique_files = []
+        seen_names = set()
+        for file_path in image_files:
+            if file_path.name not in seen_names:
+                unique_files.append(file_path)
+                seen_names.add(file_path.name)
+        
+        image_files = unique_files
+        
         if not image_files:
             logger.error(f"No image files found in {book_name}")
             return False
         
-        # Sort files by name
-        image_files.sort(key=lambda x: x.name)
+        # Sort files by name using natural sort
+        image_files.sort(key=lambda x: self._natural_sort_key(x.name))
         
         try:
             # Open first image
