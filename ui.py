@@ -73,7 +73,9 @@ class MangaDownloaderUI:
                 
                 # 恢复各个输入框的值
                 if 'download_url' in config:
-                    self.download_url.set(config['download_url'])
+                    saved_url = config['download_url']
+                    if saved_url and saved_url != "https://e-hentai.org/s/f079533ce8/3210316-1":
+                        self.download_url.set(saved_url)
                 if 'save_path' in config:
                     self.save_path.set(config['save_path'])
                 if 'folder_name' in config:
@@ -145,7 +147,7 @@ class MangaDownloaderUI:
             "zh": {
                 "title": "E-hentai漫画下载器",
                 "download_config": "下载配置",
-                "download_url": "下载地址:(请给出首个页面地址，例如https://e-hentai.org/s/f079533ce8/3210316-1)",
+                "download_url": "下载地址:",
                 "save_path": "保存路径:",
                 "folder_name": "文件夹名称:",
                 "folder_name_hint": "(留空使用漫画标题)",
@@ -206,7 +208,7 @@ class MangaDownloaderUI:
             "en": {
                 "title": "E-hentai Manga Downloader",
                 "download_config": "Download Configuration",
-                "download_url": "Download URL:(Please give the first page address, such as https://e-hentai.org/s/f079533ce8/3210316-1)",
+                "download_url": "Download URL:",
                 "save_path": "Save Path:",
                 "folder_name": "Folder Name:",
                 "folder_name_hint": "(Leave empty to use manga title)",
@@ -621,6 +623,33 @@ class MangaDownloaderUI:
         url_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(15, 0), pady=(0, 8))
         # 绑定自动保存
         self.download_url.trace('w', lambda *args: self.save_config())
+        
+        # Set placeholder text for URL entry
+        if not self.download_url.get():
+            url_entry.insert(0, "https://e-hentai.org/s/f079533ce8/3210316-1")
+            url_entry.configure(foreground='#718096')
+            self.download_url.set("")  # Ensure variable is empty for placeholder
+        else:
+            # If there's a saved URL, ensure it's displayed with normal text color
+            url_entry.configure(foreground='#2d3748')
+        
+        def on_url_focus_in(event):
+            if url_entry.get() == "https://e-hentai.org/s/f079533ce8/3210316-1":
+                url_entry.delete(0, tk.END)
+                url_entry.configure(foreground='#2d3748')
+                self.download_url.set("")  # Clear the variable too
+        
+        def on_url_focus_out(event):
+            if not url_entry.get():
+                url_entry.insert(0, "https://e-hentai.org/s/f079533ce8/3210316-1")
+                url_entry.configure(foreground='#718096')
+                self.download_url.set("")  # Ensure variable is also empty
+            else:
+                # 保存实际输入的内容
+                self.save_config()
+        
+        url_entry.bind('<FocusIn>', on_url_focus_in)
+        url_entry.bind('<FocusOut>', on_url_focus_out)
         
         # Save Path
         ttk.Label(inner_frame, text=self.t("save_path"), 

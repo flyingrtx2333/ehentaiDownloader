@@ -38,9 +38,6 @@ class MangaDownloader:
         self.error_image_data = self._load_error_image()
         self.title_replace_map = self._get_title_replace_map()
         
-        # Configure logger
-        logger.add("manga_downloader.log", rotation="10 MB", level="INFO")
-        
     def _load_error_image(self) -> bytes:
         """Load error image data for comparison"""
         try:
@@ -57,7 +54,9 @@ class MangaDownloader:
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers"""
         return {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+            'accept': 'text/html',
+            'cache-control': 'no-cache'
         }
     
     def parse_url_info(self, url: str) -> Tuple[str, int, str]:
@@ -117,7 +116,11 @@ class MangaDownloader:
                 )
                 
                 if "Your IP address has been temporarily banned" in response.text:
-                    logger.warning("IP has been temporarily banned, need to change proxy")
+                    logger.warning("IP被网站禁止了，需要更换proxy")
+                    return False
+                
+                if "This gallery has been removed or is unavailable." in response.text:
+                    logger.warning("该作品已被网站移除")
                     return False
                 
                 total_pages = self._extract_total_pages(response.text)
@@ -350,10 +353,18 @@ class MangaDownloader:
     
     def _extract_image_url(self, html_content: str) -> Optional[str]:
         """Extract image URL from HTML content"""
+        # First try: original logic - look for jads.js pattern
         matches = re.findall('src="(.*?)"', html_content)
         for i, match in enumerate(matches):
             if match.endswith("jads.js") and i + 1 < len(matches):
                 return matches[i + 1]
+        
+        # Second try: look for <img id="img"> pattern
+        img_pattern = r'<img\s+id="img"\s+src="([^"]+)"'
+        img_matches = re.findall(img_pattern, html_content)
+        if img_matches:
+            return img_matches[0]
+        logger.warning(f"无法找到url：{html_content}")
         return None
     
     def _natural_sort_key(self, text: str) -> List[Tuple[int, str]]:
