@@ -6,9 +6,7 @@ Author: Your Name
 Version: 1.0.0
 """
 
-import os
 import re
-import traceback
 from typing import List, Optional, Dict, Tuple
 from pathlib import Path
 
@@ -22,7 +20,8 @@ from reportlab.pdfgen import canvas
 class MangaDownloader:
     """Main class for downloading manga images and converting to PDF"""
     
-    def __init__(self, proxy_host: str = "127.0.0.1", proxy_port: int = 7890):
+    def __init__(self, proxy_host: str = "127.0.0.1", proxy_port: int = 7890,
+                 max_page_request_retries: int = 3):
         """
         Initialize the manga downloader
         
@@ -37,11 +36,13 @@ class MangaDownloader:
         self.session = requests.Session()
         self.error_image_data = self._load_error_image()
         self.title_replace_map = self._get_title_replace_map()
+        self.max_page_request_retries = max_page_request_retries
+        self.last_download_dir: Optional[Path] = None
         
     def _load_error_image(self) -> bytes:
         """Load error image data for comparison"""
         try:
-            with open('error.jpg', 'rb') as f:
+            with open(Path(__file__).with_name('error.jpg'), 'rb') as f:
                 return f.read()
         except FileNotFoundError:
             logger.warning("error.jpg not found, using empty bytes")
@@ -50,6 +51,12 @@ class MangaDownloader:
     def _get_title_replace_map(self) -> Dict[str, str]:
         """Get title replacement mapping"""
         return {}
+
+    @staticmethod
+    def _safe_folder_name(title: str) -> str:
+        """Return a Windows-safe directory name without changing the display title."""
+        cleaned = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', title).strip().rstrip('. ')
+        return cleaned or "Unknown_Title"
     
     def _get_headers(self) -> Dict[str, str]:
         """Get request headers"""
@@ -75,9 +82,10 @@ class MangaDownloader:
         current_id = parts[-2]
         return book_id, current_page, current_id
     
-    def download_manga_from_url(self, first_url: str, custom_folder_name: str = None, 
-                               progress_callback=None, single_page_only: bool = False, 
-                               auto_retry: bool = False) -> bool:
+    def download_manga_from_url(self, first_url: str, custom_folder_name: str = None,
+                               progress_callback=None, single_page_only: bool = False,
+                               auto_retry: bool = False,
+                               output_dir: Optional[str] = None) -> bool:
         """
         Download manga starting from a specific URL
         
@@ -87,6 +95,8 @@ class MangaDownloader:
             progress_callback: Callback function for progress updates (progress, status, success_count, failed_count, total_count)
             single_page_only: If True, only download the single page specified by first_url
             auto_retry: If True, automatically retry failed downloads
+            output_dir: Directory in which the manga folder is created. If omitted,
+                the current working directory is used for backwards compatibility.
             
         Returns:
             True if successful, False otherwise
@@ -97,6 +107,8 @@ class MangaDownloader:
         failed_count = 0
         total_pages = 0
         current_page_num = current_page
+        output_root = Path(output_dir).expanduser() if output_dir else None
+        target_dir: Optional[Path] = None
         
         logger.info(f"Starting download for book {book_id} from page {current_page}")
         
@@ -150,47 +162,63 @@ class MangaDownloader:
                 progress_callback(progress, f"Downloading page {current_page}...", 
                                success_count, failed_count, total_pages)
             
-            try:
-                response = self.session.get(
-                    url=url,
-                    proxies=self.proxies,
-                    headers=self._get_headers(),
-                    timeout=8
-                )
-                
-                if "Your IP address has been temporarily banned" in response.text:
-                    logger.warning("IP has been temporarily banned, need to change proxy")
-                    return False
-                
-                # If we couldn't get total pages initially, try to extract it now
-                if total_pages == 1 and current_page == current_page_num:
-                    extracted_total = self._extract_total_pages(response.text)
-                    if extracted_total > 0:
-                        total_pages = extracted_total
-                        logger.info(f"Updated total pages to: {total_pages}")
-                
-                title = self._extract_title(response.text)
-                if title in self.title_replace_map:
-                    title = self.title_replace_map[title]
-                
-                # Use custom folder name if provided
-                if custom_folder_name:
-                    title = custom_folder_name
-                    
-            except requests.exceptions.ReadTimeout:
-                logger.warning(f"Timeout for page {current_page}, retrying...")
-                continue
-            except requests.exceptions.ConnectionError:
-                logger.warning(f"Connection error for page {current_page}, retrying...")
-                continue
-            except Exception as e:
-                logger.error(f"Unexpected error for page {current_page}: {e}")
+            response = None
+            for attempt in range(1, self.max_page_request_retries + 1):
+                try:
+                    response = self.session.get(
+                        url=url,
+                        proxies=self.proxies,
+                        headers=self._get_headers(),
+                        timeout=8
+                    )
+                    break
+                except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError) as e:
+                    logger.warning(
+                        f"Request failed for page {current_page} "
+                        f"({attempt}/{self.max_page_request_retries}): {e}"
+                    )
+                except Exception as e:
+                    logger.error(f"Unexpected error for page {current_page}: {e}")
+                    break
+
+            if response is None:
                 self.failed_urls.append(url)
-                failed_count += 1
-                continue
+                if progress_callback:
+                    progress_callback(
+                        ((current_page - current_page_num) / max(total_pages, 1)) * 100,
+                        f"Page {current_page} could not be requested after "
+                        f"{self.max_page_request_retries} attempts.",
+                        success_count, failed_count + 1, total_pages,
+                    )
+                return False
+
+            if "Your IP address has been temporarily banned" in response.text:
+                logger.warning("IP has been temporarily banned, need to change proxy")
+                return False
+
+            # If we couldn't get total pages initially, try to extract it now
+            if total_pages == 1 and current_page == current_page_num:
+                extracted_total = self._extract_total_pages(response.text)
+                if extracted_total > 0:
+                    total_pages = extracted_total
+                    logger.info(f"Updated total pages to: {total_pages}")
+
+            title = self._extract_title(response.text)
+            if title in self.title_replace_map:
+                title = self.title_replace_map[title]
+
+            # Use custom folder name if provided
+            if custom_folder_name:
+                title = custom_folder_name
+
+            if target_dir is None:
+                safe_title = self._safe_folder_name(title)
+                target_dir = (output_root / safe_title) if output_root else Path(safe_title)
+                target_dir.mkdir(parents=True, exist_ok=True)
+                self.last_download_dir = target_dir.resolve()
             
             try:
-                self._download_and_save_image(response.text, title, current_page)
+                self._download_and_save_image(response.text, target_dir, current_page)
                 success_count += 1
             except Exception as e:
                 logger.warning(f"Failed to save image for page {current_page}: {e}")
@@ -300,7 +328,7 @@ class MangaDownloader:
             logger.error(f"Failed to extract total pages: {e}")
             return 0
     
-    def _download_and_save_image(self, html_content: str, dir_name: str, page_num: int) -> bool:
+    def _download_and_save_image(self, html_content: str, dir_name: Path, page_num: int) -> bool:
         """
         Download and save image from HTML content
         
@@ -312,7 +340,7 @@ class MangaDownloader:
         Returns:
             True if successful, False otherwise
         """
-        image_path = Path(dir_name) / f"{page_num}.jpg"
+        image_path = dir_name / f"{page_num}.jpg"
         
         if image_path.exists():
             logger.info(f"Image {page_num} already exists, skipping")
@@ -338,7 +366,7 @@ class MangaDownloader:
                 raise Exception("Downloaded image is error image, not saving")
             
             # Create directory if it doesn't exist
-            Path(dir_name).mkdir(exist_ok=True)
+            dir_name.mkdir(parents=True, exist_ok=True)
             
             # Save image
             with open(image_path, "wb") as f:

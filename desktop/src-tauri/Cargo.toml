@@ -1,0 +1,14 @@
+[package]
+name = "manga-desk"
+version = "0.2.1"
+description = "A local-first manga download workspace"
+authors = ["Manga Desk contributors"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Manga Desk",
+  "version": "0.2.1",
+  "identifier": "com.local.mangadesk",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Manga Desk", "width": 1280, "height": 820, "minWidth": 1024, "minHeight": 700 }],
+    "security": { "csp": null }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": {
+      "python-engine/manga-engine": "manga-engine"
+    }
+  }
+}
