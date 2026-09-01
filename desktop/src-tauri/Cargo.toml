@@ -1,7 +1,7 @@
 [package]
 name = "manga-desk"
-version = "0.2.1"
-description = "A local-first manga download workspace"
+version = "0.2.2"
+description = "A desktop manga download workspace"
 authors = ["Manga Desk contributors"]
 edition = "2021"
 

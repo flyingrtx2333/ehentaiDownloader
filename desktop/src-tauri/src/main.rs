@@ -1,5 +1,6 @@
 use std::{
     collections::HashMap,
+    fs,
     io::{BufRead, BufReader},
     path::PathBuf,
     process::{Child, Command, Stdio},
@@ -10,6 +11,8 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 struct TaskManager(Mutex<HashMap<String, Child>>);
+
+const SESSION_FILE: &str = "session.json";
 
 enum Engine {
     Frozen(PathBuf),
@@ -40,6 +43,29 @@ fn locate_engine(app: &AppHandle) -> Result<Engine, String> {
             .unwrap_or_else(|| "python".into())
     });
     Ok(Engine::Python { executable, script: local })
+}
+
+fn session_path(app: &AppHandle) -> Result<PathBuf, String> {
+    let directory = app.path().app_data_dir().map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory).map_err(|error| format!("无法创建会话目录：{error}"))?;
+    Ok(directory.join(SESSION_FILE))
+}
+
+#[tauri::command]
+fn load_session(app: AppHandle) -> Result<Value, String> {
+    let path = session_path(&app)?;
+    match fs::read_to_string(&path) {
+        Ok(contents) => serde_json::from_str(&contents).map_err(|error| format!("会话记录格式无效：{error}")),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(json!({})),
+        Err(error) => Err(format!("无法读取会话记录：{error}")),
+    }
+}
+
+#[tauri::command]
+fn save_session(app: AppHandle, session: Value) -> Result<(), String> {
+    let path = session_path(&app)?;
+    let contents = serde_json::to_string_pretty(&session).map_err(|error| error.to_string())?;
+    fs::write(&path, contents).map_err(|error| format!("无法保存会话记录：{error}"))
 }
 
 #[tauri::command]
@@ -94,10 +120,35 @@ fn cancel_task(manager: State<'_, TaskManager>, task_id: String) -> Result<(), S
     process.kill().map_err(|error| format!("无法停止任务：{error}"))
 }
 
+#[tauri::command]
+fn open_in_explorer(path: String) -> Result<(), String> {
+    let target = PathBuf::from(path);
+    if !target.exists() {
+        return Err("任务输出不存在，可能已被移动或删除。".into());
+    }
+
+    let mut explorer = Command::new("explorer.exe");
+    if target.is_file() {
+        explorer.arg("/select,").arg(&target);
+    } else {
+        explorer.arg(&target);
+    }
+    explorer
+        .spawn()
+        .map_err(|error| format!("无法打开资源管理器：{error}"))?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(TaskManager(Mutex::new(HashMap::new())))
-        .invoke_handler(tauri::generate_handler![start_task, cancel_task])
+        .invoke_handler(tauri::generate_handler![
+            start_task,
+            cancel_task,
+            open_in_explorer,
+            load_session,
+            save_session,
+        ])
         .run(tauri::generate_context!())
         .expect("启动 Manga Desk 时发生错误");
 }
