@@ -1,12 +1,12 @@
 {
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
     "icon": [
       "icons/icon.ico"
     ],
     "resources": {
-      "python-engine/manga-engine": "manga-engine"
+      "python-engine/manga-engine.exe": "manga-engine/manga-engine.exe"
     }
   }
 }

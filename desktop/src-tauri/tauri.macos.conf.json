@@ -11,6 +11,11 @@
     ]
   },
   "bundle": {
-    "icon": ["icons/icon.icns", "icons/icon.png"]
+    "active": true,
+    "targets": ["app"],
+    "icon": ["icons/icon.icns", "icons/icon.png"],
+    "resources": {
+      "python-engine/manga-engine": "manga-engine/manga-engine"
+    }
   }
 }

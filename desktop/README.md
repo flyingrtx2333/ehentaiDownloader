@@ -23,6 +23,8 @@ Tauri selects the interface for the host OS. It prefers the repository `.venv`; 
 
 ## Platform assets and packaging
 
-The macOS window size is in `src-tauri/tauri.macos.conf.json`, and its layout is in `src/mac/styles.css`. Windows packaging is configured in `src-tauri/tauri.windows.conf.json`; build it on Windows with `npx tauri build --config src-tauri/tauri.windows.conf.json`.
+The macOS window size is in `src-tauri/tauri.macos.conf.json`, and its layout is in `src/mac/styles.css`. Install the root Python dependencies and PyInstaller, then run `python desktop/scripts/build_engine.py` from the repository root. This creates the engine bundled by both platform configurations.
 
-The selected book and arrow artwork is in `branding/`. The sidebar and favicon use `src/assets/logo-mark.png`; macOS Dock icons in `src-tauri/icons/` have transparent padding for a balanced apparent size. A macOS release still needs a packaged Python engine and installer verification.
+On Windows, run `npx tauri build --config src-tauri/tauri.windows.conf.json` from `desktop/`. On macOS, run `npx tauri build --config src-tauri/tauri.macos.conf.json` there, then `bash desktop/scripts/package_macos.sh` from the repository root to create the DMG. The tag workflow in `.github/workflows/release.yml` builds both macOS architectures and Windows before publishing a Release.
+
+The selected book and arrow artwork is in `branding/`. The sidebar and favicon use `src/assets/logo-mark.png`; macOS Dock icons in `src-tauri/icons/` have transparent padding for a balanced apparent size.

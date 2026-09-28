@@ -1,6 +1,6 @@
 # Manga Desk
 
-漫画下载桌面工具。当前发布版 `v0.2.2` 面向 Windows；macOS 界面可从源码运行，安装包仍在开发中。两个界面使用同一套 Python 下载引擎，提供下载队列、PDF 生成、输出目录打开和 JSON 会话记录。
+漫画下载桌面工具。`v0.2.3` 提供 Windows 安装包和 macOS 磁盘映像。两个界面使用同一套 Python 下载引擎，提供下载队列、PDF 生成、输出目录打开和 JSON 会话记录。
 
 ## 界面预览
 
@@ -14,7 +14,7 @@ Windows `v0.2.2` 发布版：
 
 ## 安装
 
-从 [Releases](https://github.com/flyingrtx2333/ehentaiDownloader/releases) 下载最新的 `Manga.Desk_*_x64-setup.exe`，安装后直接运行 **Manga Desk**。正式安装包内置下载引擎，使用时不需要单独安装 Python。
+从 [Releases](https://github.com/flyingrtx2333/ehentaiDownloader/releases) 选择系统对应的文件：Windows 下载 `*_windows_x64-setup.exe`；Apple 芯片 Mac 下载 `*_macos_arm64.dmg`；Intel Mac 下载 `*_macos_x86_64.dmg`。安装包均内置下载引擎，使用时不需要单独安装 Python。macOS 包目前未进行 Apple 公证，首次打开若被系统拦截，可在“系统设置 → 隐私与安全性”中允许打开。
 
 ## 功能
 
@@ -53,13 +53,14 @@ python ui.py
 
 ## 发布构建
 
+在目标系统上安装 PyInstaller，并先生成内置 Python 引擎：
+
 ```bash
-cd desktop
-npm install
-npx tauri build --config src-tauri/tauri.windows.conf.json
+python -m pip install -r requirements.txt "pyinstaller>=6,<7"
+python desktop/scripts/build_engine.py
 ```
 
-当前发布构建面向 Windows，需在 Windows 上运行上述命令；安装包位于 `desktop/src-tauri/target/release/bundle/`。macOS 开发版已有应用图标，但发布前仍需打包对应平台的 Python 引擎并完成安装包验证。
+Windows：在 `desktop/` 运行 `npx tauri build --config src-tauri/tauri.windows.conf.json`。macOS：在 `desktop/` 运行 `npx tauri build --config src-tauri/tauri.macos.conf.json`，然后从仓库根目录运行 `bash desktop/scripts/package_macos.sh`。推送 `v*` 标签会自动构建 Windows、Apple 芯片和 Intel Mac 三种产物，并在全部成功后创建 Release。
 
 ## 代理配置
 

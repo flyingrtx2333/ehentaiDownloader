@@ -1,0 +1,111 @@
+name: Desktop release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check release version
+        shell: bash
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./desktop/package.json').version")"
+      - name: Build Python engine
+        run: |
+          python -m pip install -r requirements.txt 'pyinstaller>=6,<7'
+          python desktop/scripts/build_engine.py
+      - name: Build Windows installer
+        working-directory: desktop
+        run: |
+          npm ci
+          npx tauri build --config src-tauri/tauri.windows.conf.json
+      - name: Collect Windows installer
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem 'desktop/src-tauri/target/release/bundle/nsis/*-setup.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'Windows installer was not produced' }
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          New-Item -ItemType Directory -Force release-assets | Out-Null
+          Copy-Item $installer.FullName "release-assets/Manga.Desk_${version}_windows_x64-setup.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows
+          path: release-assets/*
+          if-no-files-found: error
+
+  macos:
+    strategy:
+      matrix:
+        runner: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check release version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./desktop/package.json').version")"
+      - name: Build Python engine
+        run: |
+          python3 -m pip install -r requirements.txt 'pyinstaller>=6,<7'
+          python3 desktop/scripts/build_engine.py
+      - name: Build macOS app
+        working-directory: desktop
+        run: |
+          npm ci
+          npx tauri build --config src-tauri/tauri.macos.conf.json
+      - name: Package macOS disk image
+        run: bash desktop/scripts/package_macos.sh release-assets
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.runner }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  release:
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify release assets
+        run: |
+          test "$(find release-assets -maxdepth 1 -name '*.exe' | wc -l)" -eq 1
+          test "$(find release-assets -maxdepth 1 -name '*.dmg' | wc -l)" -eq 2
+          ls -lh release-assets
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Manga Desk ${{ github.ref_name }}
+          generate_release_notes: true
+          body: |
+            Choose the Windows x64 installer, macOS Apple Silicon DMG, or macOS Intel DMG for your computer. Each package includes the Python download engine.
+
+            The macOS builds are not yet Apple notarized. If macOS blocks the first launch, allow Manga Desk in System Settings → Privacy & Security.
+          files: release-assets/*
+          fail_on_unmatched_files: true

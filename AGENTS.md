@@ -6,7 +6,7 @@ The Python download and PDF engines live at the repository root: `manga_download
 
 ## Build, Test, and Development Commands
 
-Use Python 3.10+ and install root dependencies with `python -m pip install -r requirements.txt` (prefer a local `.venv`). From `desktop/`, run `npm install` to install frontend dependencies and `npm run tauri dev` to launch the desktop app. `npm run build` checks TypeScript and builds the frontend. `npx tauri build --config src-tauri/tauri.windows.conf.json` produces the Windows installer under `desktop/src-tauri/target/release/bundle/`. Run `python ui.py` from the root for the legacy Tk interface.
+Use Python 3.10+ and install root dependencies with `python -m pip install -r requirements.txt` (prefer a local `.venv`). From `desktop/`, run `npm install` and `npm run tauri dev` to launch the app; `npm run build` checks TypeScript. For releases, install PyInstaller and run `python desktop/scripts/build_engine.py` from the root before `npx tauri build --config src-tauri/tauri.windows.conf.json` or the macOS config from `desktop/`. Run `bash desktop/scripts/package_macos.sh` to make a DMG. A `v*` tag triggers the three-platform Release workflow. Run `python ui.py` for the legacy Tk interface.
 
 ## Coding Style & Naming Conventions
 
