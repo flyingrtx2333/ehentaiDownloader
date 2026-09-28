@@ -85,7 +85,7 @@ class MangaDownloader:
     def download_manga_from_url(self, first_url: str, custom_folder_name: str = None,
                                progress_callback=None, single_page_only: bool = False,
                                auto_retry: bool = False,
-                               output_dir: Optional[str] = None) -> bool:
+                               output_dir: Optional[str] = None, title_callback=None) -> bool:
         """
         Download manga starting from a specific URL
         
@@ -97,6 +97,7 @@ class MangaDownloader:
             auto_retry: If True, automatically retry failed downloads
             output_dir: Directory in which the manga folder is created. If omitted,
                 the current working directory is used for backwards compatibility.
+            title_callback: Called once when the output folder and display title are known.
             
         Returns:
             True if successful, False otherwise
@@ -216,6 +217,8 @@ class MangaDownloader:
                 target_dir = (output_root / safe_title) if output_root else Path(safe_title)
                 target_dir.mkdir(parents=True, exist_ok=True)
                 self.last_download_dir = target_dir.resolve()
+                if title_callback:
+                    title_callback(title)
             
             try:
                 self._download_and_save_image(response.text, target_dir, current_page)

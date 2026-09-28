@@ -1,0 +1,12 @@
+{
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "resources": {
+      "python-engine/manga-engine": "manga-engine"
+    }
+  }
+}

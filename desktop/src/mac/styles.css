@@ -1,0 +1,98 @@
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, 'Noto Sans SC', sans-serif;
+  color: #242833;
+  background: #f5f6f8;
+}
+
+body { min-width: 900px; background: #f5f6f8; }
+button, input { font-family: inherit; }
+button:focus-visible, input:focus-visible { outline-color: #3478d4; }
+
+.mac-shell {
+  grid-template-columns: 180px minmax(0, 1fr) 240px;
+  background: #f8f9fb;
+}
+
+.mac-shell .sidebar {
+  padding: 26px 12px 16px;
+  border-right: 1px solid #dfe3e9;
+  background: linear-gradient(160deg, #edf2f9, #e8edf5 72%, #e6ebf2);
+}
+
+.mac-shell .brand { color: #27364d; }
+.mac-shell .brand { gap: 8px; padding: 0 7px 26px; }
+.mac-shell .brand b { font-size: 15px; }
+.mac-shell .brand-logo { width: 30px; height: 30px; }
+.mac-shell nav { gap: 3px; }
+.mac-shell .nav-item { min-height: 36px; padding: 7px 9px; font-size: 12px; }
+.mac-shell .brand b,
+.mac-shell .topbar h1,
+.mac-shell .task-main strong,
+.mac-shell .inspect-copy h2,
+.mac-shell .tool-intro h2,
+.mac-shell .empty-state h2 { font-family: inherit; }
+
+.mac-shell .primary-button { background: #3478d4; }
+
+.mac-shell .nav-item { border-radius: 9px; color: #53657d; }
+.mac-shell .nav-item:hover { background: rgba(255, 255, 255, .55); }
+.mac-shell .nav-item.active {
+  color: #1754a0;
+  border-color: transparent;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: 0 1px 4px rgba(32, 55, 88, .07);
+}
+.mac-shell .nav-item.active::before { display: none; }
+
+.mac-shell .workspace { background: #fafbfc; }
+.mac-shell .workspace { padding: 23px 26px 24px; }
+.mac-shell .topbar { min-height: 45px; margin-bottom: 19px; padding-bottom: 13px; border-bottom-color: #e5e8ed; }
+.mac-shell .topbar h1 { font-size: 25px; }
+.mac-shell .topbar h1::after { margin-top: 5px; font-size: 9px; }
+.mac-shell .create-task { gap: 12px; margin-bottom: 21px; padding: 17px; }
+.mac-shell .task-number { padding-top: 23px; }
+.mac-shell .inline-options { gap: 13px; margin-top: 7px; }
+.mac-shell .inline-options > input { width: min(46%, 220px); }
+.mac-shell .primary-button { padding: 10px 12px; }
+.mac-shell .section-line { padding-bottom: 8px; }
+.mac-shell .task-row { grid-template-columns: 12px minmax(110px, 1fr) minmax(110px, 170px) 14px; gap: 8px; padding: 12px 8px; }
+.mac-shell .tool-form,
+.mac-shell .settings-form { gap: 15px; padding: 20px; }
+.mac-shell .create-task,
+.mac-shell .tool-form,
+.mac-shell .settings-form {
+  border-color: #e3e7ed;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(26, 48, 79, .045);
+}
+.mac-shell .task-number,
+.mac-shell .task-progress b { color: #3478d4; }
+.mac-shell .primary-button { border-color: #2a6ac1; box-shadow: 0 3px 9px rgba(38, 107, 194, .18); }
+.mac-shell .primary-button:hover { background: #286bc4; box-shadow: 0 5px 14px rgba(38, 107, 194, .23); }
+.mac-shell .task-row { border-top-color: #e7e9ee; }
+.mac-shell .task-row:hover,
+.mac-shell .task-row.selected { background: #edf4ff; }
+.mac-shell .status-dot.running { border-color: #3478d4; background: #3478d4; box-shadow: 0 0 0 4px rgba(52, 120, 212, .12); }
+.mac-shell .track { background: #e6eaf0; }
+.mac-shell .track i { background: #3478d4; }
+.mac-shell .inspector { min-height: 100vh; padding: 25px 16px 18px; border-left-color: #e1e5eb; background: #f4f6f9; }
+.mac-shell .progress-ring { width: 82px; height: 82px; margin: 23px auto 12px; background: conic-gradient(#3478d4 var(--progress), #e0e6ed 0); }
+.mac-shell .progress-ring::before { background: #f4f6f9; }
+.mac-shell .progress-ring span { color: #2d65ad; font-size: 17px; }
+.mac-shell .inspect-copy h2 { margin-top: 8px; font-size: 14px; }
+.mac-shell dl { margin: 16px 0; padding: 10px 0; }
+.mac-shell .path-button { padding: 8px; }
+.mac-shell .log-panel { margin-top: 18px; padding-top: 11px; }
+.mac-shell .log-panel pre { height: 88px; margin-top: 7px; }
+.mac-shell .path-button:hover { border-color: #3478d4; }
+
+@media (max-width: 980px) {
+  .mac-shell { grid-template-columns: 164px minmax(0, 1fr) 220px; }
+  .mac-shell .workspace { padding-inline: 20px; }
+  .mac-shell .create-task { grid-template-columns: minmax(0, 1fr) auto; }
+  .mac-shell .task-number { display: none; }
+  .mac-shell .inline-options { flex-wrap: wrap; }
+  .mac-shell .inline-options > input { width: 100%; }
+  .mac-shell .task-row { grid-template-columns: 12px minmax(100px, 1fr) minmax(90px, 125px) 14px; }
+}

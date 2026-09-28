@@ -1,0 +1,16 @@
+{
+  "app": {
+    "windows": [
+      {
+        "title": "Manga Desk",
+        "width": 960,
+        "height": 600,
+        "minWidth": 900,
+        "minHeight": 540
+      }
+    ]
+  },
+  "bundle": {
+    "icon": ["icons/icon.icns", "icons/icon.png"]
+  }
+}

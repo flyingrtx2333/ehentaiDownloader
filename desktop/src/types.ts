@@ -16,9 +16,10 @@ export interface Task {
 }
 
 export interface BridgeEvent {
-  type: 'started' | 'progress' | 'log' | 'completed' | 'error'
+  type: 'started' | 'metadata' | 'progress' | 'log' | 'completed' | 'error'
   taskId?: string
   kind?: 'download' | 'pdf'
+  title?: string
   progress?: number
   status?: string
   success?: number

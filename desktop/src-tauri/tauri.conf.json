@@ -10,15 +10,20 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Manga Desk", "width": 1280, "height": 820, "minWidth": 1024, "minHeight": 700 }],
-    "security": { "csp": null }
+    "windows": [
+      {
+        "title": "Manga Desk",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 1024,
+        "minHeight": 700
+      }
+    ],
+    "security": {
+      "csp": null
+    }
   },
   "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": ["icons/icon.ico"],
-    "resources": {
-      "python-engine/manga-engine": "manga-engine"
-    }
+    "active": false
   }
 }

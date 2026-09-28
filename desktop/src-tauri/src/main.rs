@@ -23,7 +23,8 @@ fn locate_engine(app: &AppHandle) -> Result<Engine, String> {
     // Release builds ship an isolated PyInstaller engine next to the app;
     // end users do not need Python or a virtual environment installed.
     if let Ok(resource_dir) = app.path().resource_dir() {
-        let packaged = resource_dir.join("manga-engine").join("manga-engine.exe");
+        let engine_name = if cfg!(target_os = "windows") { "manga-engine.exe" } else { "manga-engine" };
+        let packaged = resource_dir.join("manga-engine").join(engine_name);
         if packaged.exists() {
             return Ok(Engine::Frozen(packaged));
         }
@@ -36,11 +37,16 @@ fn locate_engine(app: &AppHandle) -> Result<Engine, String> {
         return Err("找不到本地 Python 引擎。请从 desktop/src-tauri 启动 Tauri。".into());
     }
     let executable = std::env::var("MANGA_DESK_PYTHON").unwrap_or_else(|_| {
+        let venv_python = if cfg!(target_os = "windows") {
+            PathBuf::from(".venv").join("Scripts").join("python.exe")
+        } else {
+            PathBuf::from(".venv").join("bin").join("python3")
+        };
         local.parent()
-            .map(|root| root.join(".venv").join("Scripts").join("python.exe"))
+            .map(|root| root.join(venv_python))
             .filter(|candidate| candidate.exists())
             .map(|candidate| candidate.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "python".into())
+            .unwrap_or_else(|| if cfg!(target_os = "windows") { "python" } else { "python3" }.into())
     });
     Ok(Engine::Python { executable, script: local })
 }
@@ -49,6 +55,13 @@ fn session_path(app: &AppHandle) -> Result<PathBuf, String> {
     let directory = app.path().app_data_dir().map_err(|error| error.to_string())?;
     fs::create_dir_all(&directory).map_err(|error| format!("无法创建会话目录：{error}"))?;
     Ok(directory.join(SESSION_FILE))
+}
+
+#[tauri::command]
+fn default_download_dir(app: AppHandle) -> Result<String, String> {
+    app.path().download_dir()
+        .map(|path| path.to_string_lossy().into_owned())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -121,21 +134,26 @@ fn cancel_task(manager: State<'_, TaskManager>, task_id: String) -> Result<(), S
 }
 
 #[tauri::command]
-fn open_in_explorer(path: String) -> Result<(), String> {
+fn open_output(path: String) -> Result<(), String> {
     let target = PathBuf::from(path);
     if !target.exists() {
         return Err("任务输出不存在，可能已被移动或删除。".into());
     }
 
-    let mut explorer = Command::new("explorer.exe");
-    if target.is_file() {
-        explorer.arg("/select,").arg(&target);
+    let mut opener = if cfg!(target_os = "windows") {
+        let mut command = Command::new("explorer.exe");
+        if target.is_file() { command.arg("/select,"); }
+        command
+    } else if cfg!(target_os = "macos") {
+        let mut command = Command::new("open");
+        if target.is_file() { command.arg("-R"); }
+        command
     } else {
-        explorer.arg(&target);
-    }
-    explorer
+        Command::new("xdg-open")
+    };
+    opener.arg(&target)
         .spawn()
-        .map_err(|error| format!("无法打开资源管理器：{error}"))?;
+        .map_err(|error| format!("无法打开任务输出：{error}"))?;
     Ok(())
 }
 
@@ -145,7 +163,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             start_task,
             cancel_task,
-            open_in_explorer,
+            open_output,
+            default_download_dir,
             load_session,
             save_session,
         ])

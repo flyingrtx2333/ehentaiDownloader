@@ -1,4 +1,5 @@
 __pycache__/
+.venv/
 *.pyc
 *.pyo
 *.pyd
@@ -25,5 +26,7 @@ desktop/src-tauri/gen/
 desktop/src-tauri/icons/android/
 desktop/src-tauri/icons/ios/
 desktop/src-tauri/icons/*.png
+!desktop/src-tauri/icons/icon.png
 desktop/src-tauri/icons/*.icns
+!desktop/src-tauri/icons/icon.icns
 build/

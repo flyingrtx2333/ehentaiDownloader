@@ -83,6 +83,7 @@ class TaskService:
                 custom_folder_name=request.folder_name.strip() or None,
                 progress_callback=on_progress,
                 output_dir=str(save_path),
+                title_callback=lambda title: self._event("metadata", task_id, title=title),
             )
             failures = getattr(downloader, "failed_urls", [])
             if not success:
